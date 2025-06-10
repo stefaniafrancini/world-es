@@ -20,7 +20,7 @@ export const Colors = {
 // Colores del juego para celdas y teclado (opcional)
 export const GAME_COLORS: Record<string, string> = {
   green: "#6aaa64",
-  yellow: "#c9b458",
+  yellow: "#E5E921",
   gray: "#787c7e",
   lightgray: "#d3d3d3",
 };
