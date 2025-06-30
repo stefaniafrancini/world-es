@@ -13,7 +13,7 @@ import Keyboard from "../../components/Keyboard";
 import { getColors } from "../../utils/getColors";
 import { getRandomWord, isValidWord } from "../data/words";
 
-const logo = require("../../assets/images/logo.png"); // 👈 ajuste de ruta según tu estructura
+const logo = require("../../assets/images/logo.png");
 
 export default function GameScreen() {
   const [solution, setSolution] = useState<string>('');
@@ -25,6 +25,7 @@ export default function GameScreen() {
   const [showEndMessage, setShowEndMessage] = useState(false);
   const [endMessage, setEndMessage] = useState("");
   const [streak, setStreak] = useState(0);
+  const [hints, setHints] = useState(0);
 
   const fadeAnim = useRef(new Animated.Value(1)).current;
   const endAnim = useRef(new Animated.Value(0)).current;
@@ -120,11 +121,16 @@ export default function GameScreen() {
       setCurrent("");
 
       if (current === solution) {
-        setStreak(prev => prev + 1);
+        const nextStreak = streak + 1;
+        setStreak(nextStreak);
+        if (nextStreak % 1 === 0) {
+          setHints(prev => prev + 1);
+        }
         showEndGame("🎉 ¡Ganaste!");
         return;
       } else if (newGuesses.length === 6) {
         setStreak(0);
+        setHints(0);
         showEndGame(`😢 ¡Perdiste!\nLa palabra era: ${solution}`);
         return;
       }
@@ -136,6 +142,38 @@ export default function GameScreen() {
       setCurrent(current + key.toLowerCase());
     }
   };
+
+  const useHint = () => {
+  if (hints === 0) return;
+
+  // Posiciones donde aún no acertaste la letra correcta
+  const unrevealedPositions: number[] = [];
+  for (let i = 0; i < 5; i++) {
+    if (current[i] === solution[i]) {
+      // ya está acertada, no la mostramos de nuevo
+      continue;
+    }
+    unrevealedPositions.push(i);
+  }
+
+  if (unrevealedPositions.length === 0) {
+    Alert.alert("No quedan letras por revelar");
+    return;
+  }
+
+  // Elegir posición al azar entre las que faltan
+  const position = unrevealedPositions[Math.floor(Math.random() * unrevealedPositions.length)];
+  const letter = solution[position];
+
+  // Rellenar current si es más corto de 5
+  const newCurrentArray = current.padEnd(5).split("");
+  newCurrentArray[position] = letter;
+
+  setCurrent(newCurrentArray.join("").trimEnd());
+  setHints(prev => prev - 1);
+};
+
+
 
   return (
     <View style={styles.container}>
@@ -151,6 +189,22 @@ export default function GameScreen() {
             guesses={[...guesses, ...(guesses.length < 6 ? [current] : [])]}
             colors={[...colors, ...(guesses.length < 6 ? [Array(5).fill("gray")] : [])]}
           />
+          <View style={{ alignItems: "center", marginVertical: 10 }}>
+            <TouchableOpacity
+              disabled={hints === 0}
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                backgroundColor: hints > 0 ? "#6aaa64" : "#ccc",
+                padding: 8,
+                borderRadius: 20,
+              }}
+              onPress={useHint}
+            >
+              <Text style={{ color: "white", fontWeight: "bold", marginRight: 8 }}>🔍 Pista</Text>
+              <Text style={{ color: "white", fontWeight: "bold" }}>{hints}</Text>
+            </TouchableOpacity>
+          </View>
           <Keyboard onKeyPress={onKeyPress} keyColors={keyColors} />
         </>
       )}
