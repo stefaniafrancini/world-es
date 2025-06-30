@@ -26,6 +26,7 @@ export default function GameScreen() {
   const [endMessage, setEndMessage] = useState("");
   const [streak, setStreak] = useState(0);
   const [hints, setHints] = useState(0);
+  const [hintedIndexes, setHintedIndexes] = useState<number[]>([]);
 
   const fadeAnim = useRef(new Animated.Value(1)).current;
   const endAnim = useRef(new Animated.Value(0)).current;
@@ -42,14 +43,17 @@ export default function GameScreen() {
   }, []);
 
   const resetGame = () => {
-    setSolution(getRandomWord());
-    setGuesses([]);
-    setColors([]);
-    setCurrent("");
-    setKeyColors({});
-    setShowEndMessage(false);
-    endAnim.setValue(0);
-  };
+  setSolution(getRandomWord());
+  setGuesses([]);
+  setColors([]);
+  setCurrent("");
+  setKeyColors({});
+  setShowEndMessage(false);
+  // NO borres las pistas aquí
+  setHintedIndexes([]);
+  endAnim.setValue(0);
+};
+
 
   const showEndGame = (message: string) => {
     setEndMessage(message);
@@ -71,16 +75,19 @@ export default function GameScreen() {
     });
   };
 
+  // onKeyPress actualizado para respetar hintedIndexes
   const onKeyPress = (key: string) => {
+    const currentArray = current.padEnd(5, " ").split("");
+
     if (key === "↲") {
-      if (current.length !== 5) return;
-      if (!isValidWord(current)) {
+      if (current.trim().length !== 5) return;
+      if (!isValidWord(current.trim())) {
         Alert.alert("Palabra inválida");
         return;
       }
 
-      const colorRow = getColors(current, solution);
-      const newGuesses = [...guesses, current];
+      const colorRow = getColors(current.trim(), solution);
+      const newGuesses = [...guesses, current.trim()];
       const newColors = [...colors, colorRow];
 
       const updatedKeyColors = { ...keyColors };
@@ -91,10 +98,9 @@ export default function GameScreen() {
         undefined: 0,
       };
 
-      const allLetters = current.split("");
       const letterMaxColor: { [letter: string]: string } = {};
 
-      allLetters.forEach((letter, i) => {
+      current.trim().split("").forEach((letter, i) => {
         const color = colorRow[i];
         const prevColor = letterMaxColor[letter];
         const newPriority = colorPriority[color];
@@ -119,12 +125,13 @@ export default function GameScreen() {
       setGuesses(newGuesses);
       setColors(newColors);
       setCurrent("");
+      setHintedIndexes([]); // reset pistas al finalizar intento
 
-      if (current === solution) {
+      if (current.trim() === solution) {
         const nextStreak = streak + 1;
         setStreak(nextStreak);
         if (nextStreak % 1 === 0) {
-          setHints(prev => prev + 1);
+          setHints((prev) => prev + 1);
         }
         showEndGame("🎉 ¡Ganaste!");
         return;
@@ -134,26 +141,49 @@ export default function GameScreen() {
         showEndGame(`😢 ¡Perdiste!\nLa palabra era: ${solution}`);
         return;
       }
-    }
-
-    if (key === "⌫") {
-      setCurrent(current.slice(0, -1));
-    } else if (current.length < 5) {
-      setCurrent(current + key.toLowerCase());
+    } else if (key === "⌫") {
+      // Borra la última letra NO bloqueada
+      for (let i = 4; i >= 0; i--) {
+        if (!hintedIndexes.includes(i) && currentArray[i] !== " ") {
+          currentArray[i] = " ";
+          setCurrent(currentArray.join("").trimEnd());
+          return;
+        }
+      }
+    } else {
+      // Agrega letra en la primer posición libre NO bloqueada
+      for (let i = 0; i < 5; i++) {
+        if (!hintedIndexes.includes(i) && (currentArray[i] === " " || currentArray[i] === undefined)) {
+          currentArray[i] = key.toLowerCase();
+          setCurrent(currentArray.join("").trimEnd());
+          return;
+        }
+      }
     }
   };
 
   const useHint = () => {
   if (hints === 0) return;
 
-  // Posiciones donde aún no acertaste la letra correcta
+  // Identificar posiciones confirmadas como verdes en intentos anteriores
+  const confirmedPositions = new Set<number>();
+  colors.forEach((colorRow) => {
+    colorRow.forEach((color, i) => {
+      if (color === "green") {
+        confirmedPositions.add(i);
+      }
+    });
+  });
+
+  // Posiciones que no están confirmadas y no fueron usadas como pista
   const unrevealedPositions: number[] = [];
   for (let i = 0; i < 5; i++) {
-    if (current[i] === solution[i]) {
-      // ya está acertada, no la mostramos de nuevo
-      continue;
+    if (
+      !confirmedPositions.has(i) &&
+      !hintedIndexes.includes(i)
+    ) {
+      unrevealedPositions.push(i);
     }
-    unrevealedPositions.push(i);
   }
 
   if (unrevealedPositions.length === 0) {
@@ -161,18 +191,20 @@ export default function GameScreen() {
     return;
   }
 
-  // Elegir posición al azar entre las que faltan
-  const position = unrevealedPositions[Math.floor(Math.random() * unrevealedPositions.length)];
+  // Elegir posición aleatoria
+  const position =
+    unrevealedPositions[
+      Math.floor(Math.random() * unrevealedPositions.length)
+    ];
   const letter = solution[position];
 
-  // Rellenar current si es más corto de 5
-  const newCurrentArray = current.padEnd(5).split("");
+  const newCurrentArray = current.padEnd(5, " ").split("");
   newCurrentArray[position] = letter;
 
   setCurrent(newCurrentArray.join("").trimEnd());
-  setHints(prev => prev - 1);
+  setHints((prev) => prev - 1);
+  setHintedIndexes((prev) => [...prev, position]);
 };
-
 
 
   return (
